@@ -79,6 +79,6 @@ describe("estimateInference", () => {
       precision: "int4",
     });
     expect(int4.weightMemoryGb).toBe(bf16.weightMemoryGb / 4);
-    expect(int4.kvCacheGb).toBe(bf16.kvCacheGb);
+    expect(int4.kvCachePeakGb).toBe(bf16.kvCachePeakGb);
   });
 });

@@ -2,6 +2,10 @@
 
 Inference Roofline is an interactive calculator for estimating LLM serving latency, throughput, GPU memory use, and cost. Select a model, GPU, precision, batch size, sequence lengths, and model FLOPs utilization to see the prefill/decode split and the active roofline bottleneck.
 
+[Open the live Inference Roofline app](https://inference-roofline.replit.app/)
+
+![Inference Roofline interface showing model and GPU controls, performance estimates, roofline analysis, and GPU memory usage](screenshots/inference-roofline.jpg)
+
 ## Run
 
 Use the configured API Server and Inference Roofline web workflows. Run `pnpm run typecheck` for static checks and `pnpm --filter @workspace/api-server test` for estimator tests.

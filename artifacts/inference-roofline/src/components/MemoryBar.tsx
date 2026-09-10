@@ -2,17 +2,17 @@ import { cn } from "@/lib/utils";
 
 interface MemoryBarProps {
   weightsGb: number;
-  kvCacheGb: number;
+  kvCachePeakGb: number;
   capacityGb: number;
   className?: string;
 }
 
-export function MemoryBar({ weightsGb, kvCacheGb, capacityGb, className }: MemoryBarProps) {
-  const freeGb = Math.max(0, capacityGb - weightsGb - kvCacheGb);
+export function MemoryBar({ weightsGb, kvCachePeakGb, capacityGb, className }: MemoryBarProps) {
+  const freeGb = Math.max(0, capacityGb - weightsGb - kvCachePeakGb);
   const weightsPct = (weightsGb / capacityGb) * 100;
-  const kvPct = (kvCacheGb / capacityGb) * 100;
+  const kvPct = (kvCachePeakGb / capacityGb) * 100;
   
-  const fits = weightsGb + kvCacheGb <= capacityGb;
+  const fits = weightsGb + kvCachePeakGb <= capacityGb;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -30,7 +30,7 @@ export function MemoryBar({ weightsGb, kvCacheGb, capacityGb, className }: Memor
         <div 
           className={cn("h-full transition-all duration-500", fits ? "bg-chart-2" : "bg-destructive")}
           style={{ width: `${Math.min(100 - weightsPct, kvPct)}%` }}
-          title={`KV Cache: ${kvCacheGb.toFixed(2)} GB`}
+          title={`KV Cache: ${kvCachePeakGb.toFixed(2)} GB`}
         />
         {/* If exceeded, we could show a dashed red line or something, but clipping to 100% works */}
       </div>
@@ -42,7 +42,7 @@ export function MemoryBar({ weightsGb, kvCacheGb, capacityGb, className }: Memor
         </div>
         <div className="flex items-center gap-1.5">
           <div className={cn("w-2 h-2 rounded-full", fits ? "bg-chart-2" : "bg-destructive")} />
-          <span className="text-muted-foreground">KV Cache ({kvCacheGb.toFixed(1)}GB)</span>
+          <span className="text-muted-foreground">KV Cache ({kvCachePeakGb.toFixed(1)}GB)</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-2 h-2 rounded-full bg-secondary border border-border" />

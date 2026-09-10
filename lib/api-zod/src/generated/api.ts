@@ -86,7 +86,6 @@ export const CreateEstimateResponse = zod.object({
   "activeParamsBillions": zod.number(),
   "weightMemoryGb": zod.number(),
   "weightTrafficPerStepGb": zod.number(),
-  "kvCacheGb": zod.number(),
   "kvCachePeakGb": zod.number(),
   "totalMemoryGb": zod.number(),
   "freeMemoryGb": zod.number(),

@@ -85,7 +85,7 @@ overestimates decode time. Use the average over the generation instead:
 const avgKvTokens = config.inputTokens + config.outputTokens / 2;
 ```
 
-Keep the peak value for the memory-footprint numbers (`kvCacheGb`,
+Keep the peak value for the memory-footprint numbers (`kvCachePeakGb`,
 `fitsInMemory`) — peak is what has to be allocated. Only the *traffic*
 calculation uses the average. Add a `kvCachePeakGb` field so the two are
 distinguishable in the response.
@@ -107,7 +107,7 @@ tests that check against independently computed values. Add at least:
    `crossoverBatchSize === null`, and the explanation mentions the
    plateau.
 5. `int4` weight precision with `bf16` kvPrecision shrinks weight memory
-   4x while leaving `kvCacheGb` unchanged.
+4x while leaving `kvCachePeakGb` unchanged.
 
 ## README
 

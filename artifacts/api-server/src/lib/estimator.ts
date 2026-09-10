@@ -71,7 +71,6 @@ function calculatePoint(model: Model, gpu: Gpu, config: EstimateConfig) {
     activeParamsBillions: activeParams / 1e9,
     weightMemoryGb: weightBytesResident / 1e9,
     weightTrafficPerStepGb: weightBytesPerStep / 1e9,
-    kvCacheGb: kvCacheBytesPeak / 1e9,
     kvCachePeakGb: kvCacheBytesPeak / 1e9,
     totalMemoryGb,
     freeMemoryGb: Math.max(0, gpu.memoryGb - totalMemoryGb),

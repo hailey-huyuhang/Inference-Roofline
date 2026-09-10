@@ -366,7 +366,7 @@ export default function Home() {
                     <div className="text-xs font-medium text-muted-foreground">Current Configuration</div>
                     <MemoryBar 
                       weightsGb={estimate.weightMemoryGb} 
-                      kvCacheGb={estimate.kvCacheGb} 
+                      kvCachePeakGb={estimate.kvCachePeakGb} 
                       capacityGb={estimate.gpu.memoryGb}
                     />
                     {estimate.model.isMoe && (
@@ -397,7 +397,7 @@ export default function Home() {
                       </div>
                       <MemoryBar 
                         weightsGb={compareEstimate.weightMemoryGb} 
-                        kvCacheGb={compareEstimate.kvCacheGb} 
+                        kvCachePeakGb={compareEstimate.kvCachePeakGb} 
                         capacityGb={compareEstimate.gpu.memoryGb}
                         className="opacity-70 grayscale-[30%]"
                       />

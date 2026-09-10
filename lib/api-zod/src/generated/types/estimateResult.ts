@@ -21,7 +21,6 @@ export interface EstimateResult {
   activeParamsBillions: number;
   weightMemoryGb: number;
   weightTrafficPerStepGb: number;
-  kvCacheGb: number;
   kvCachePeakGb: number;
   totalMemoryGb: number;
   freeMemoryGb: number;

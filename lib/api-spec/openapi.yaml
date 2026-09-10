@@ -173,7 +173,7 @@ components:
         fitsInMemory: { type: boolean }
     EstimateResult:
       type: object
-      required: [model, gpu, precision, kvPrecision, bytesPerParameter, activeParamsBillions, weightMemoryGb, weightTrafficPerStepGb, kvCacheGb, kvCachePeakGb, totalMemoryGb, freeMemoryGb, fitsInMemory, prefillFlops, ttftSeconds, decodeMemorySeconds, decodeComputeSeconds, tpotSeconds, totalLatencySeconds, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, ridgePoint, achievableTflops, bottleneck, crossoverBatchSize, explanation, sweep]
+      required: [model, gpu, precision, kvPrecision, bytesPerParameter, activeParamsBillions, weightMemoryGb, weightTrafficPerStepGb, kvCachePeakGb, totalMemoryGb, freeMemoryGb, fitsInMemory, prefillFlops, ttftSeconds, decodeMemorySeconds, decodeComputeSeconds, tpotSeconds, totalLatencySeconds, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, ridgePoint, achievableTflops, bottleneck, crossoverBatchSize, explanation, sweep]
       properties:
         model: { $ref: "#/components/schemas/Model" }
         gpu: { $ref: "#/components/schemas/Gpu" }
@@ -183,7 +183,6 @@ components:
         activeParamsBillions: { type: number }
         weightMemoryGb: { type: number }
         weightTrafficPerStepGb: { type: number }
-        kvCacheGb: { type: number }
         kvCachePeakGb: { type: number }
         totalMemoryGb: { type: number }
         freeMemoryGb: { type: number }
