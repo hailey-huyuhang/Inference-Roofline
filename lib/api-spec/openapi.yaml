@@ -1,22 +1,21 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Inference Roofline API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: catalog
+  - name: estimates
+  - name: scenarios
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +23,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /gpus:
+    get:
+      operationId: listGpus
+      tags: [catalog]
+      responses:
+        "200":
+          description: GPU catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Gpu"
+  /models:
+    get:
+      operationId: listModels
+      tags: [catalog]
+      responses:
+        "200":
+          description: Model catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Model"
+  /estimate:
+    post:
+      operationId: createEstimate
+      tags: [estimates]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EstimateInput"
+      responses:
+        "200":
+          description: Roofline estimate with intermediate values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateResult"
+        "400":
+          description: Invalid configuration
+  /scenarios:
+    get:
+      operationId: listScenarios
+      tags: [scenarios]
+      responses:
+        "200":
+          description: Saved scenarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Scenario"
+    post:
+      operationId: createScenario
+      tags: [scenarios]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScenarioInput"
+      responses:
+        "201":
+          description: Saved scenario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+  /scenarios/{id}:
+    delete:
+      operationId: deleteScenario
+      tags: [scenarios]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
 components:
   schemas:
     HealthStatus:
@@ -31,6 +119,104 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    Gpu:
+      type: object
+      required: [id, name, hbmBandwidthGbS, denseBf16Tflops, memoryGb, hourlyCostUsd]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        hbmBandwidthGbS: { type: number }
+        denseBf16Tflops: { type: number }
+        memoryGb: { type: number }
+        hourlyCostUsd: { type: number }
+    Model:
+      type: object
+      required: [id, name, paramsBillions, numLayers, hiddenSize, numAttentionHeads, numKvHeads, isMoe, activeParamsBillions]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        paramsBillions: { type: number }
+        numLayers: { type: integer }
+        hiddenSize: { type: integer }
+        numAttentionHeads: { type: integer }
+        numKvHeads: { type: integer }
+        isMoe: { type: boolean }
+        activeParamsBillions: { type: number }
+    EstimateInput:
+      type: object
+      required: [modelId, gpuId, precision, batchSize, inputTokens, outputTokens, mfu]
+      properties:
+        modelId: { type: integer }
+        gpuId: { type: integer }
+        precision:
+          type: string
+          enum: [fp16, bf16, fp8, int4]
+        batchSize: { type: integer, minimum: 1, maximum: 256 }
+        inputTokens: { type: integer, minimum: 1, maximum: 131072 }
+        outputTokens: { type: integer, minimum: 1, maximum: 32768 }
+        mfu: { type: number, minimum: 0.05, maximum: 1 }
+    SweepPoint:
+      type: object
+      required: [batchSize, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, bottleneck, fitsInMemory]
+      properties:
+        batchSize: { type: integer }
+        throughputTokensPerSec: { type: number }
+        costPerMillionTokensUsd: { type: number }
+        arithmeticIntensity: { type: number }
+        bottleneck:
+          type: string
+          enum: [memory, compute]
+        fitsInMemory: { type: boolean }
+    EstimateResult:
+      type: object
+      required: [model, gpu, precision, bytesPerParameter, activeParamsBillions, weightMemoryGb, kvCacheGb, totalMemoryGb, freeMemoryGb, fitsInMemory, prefillFlops, ttftSeconds, decodeMemorySeconds, decodeComputeSeconds, tpotSeconds, totalLatencySeconds, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, ridgePoint, achievableTflops, bottleneck, crossoverBatchSize, explanation, sweep]
+      properties:
+        model: { $ref: "#/components/schemas/Model" }
+        gpu: { $ref: "#/components/schemas/Gpu" }
+        precision: { type: string, enum: [fp16, bf16, fp8, int4] }
+        bytesPerParameter: { type: number }
+        activeParamsBillions: { type: number }
+        weightMemoryGb: { type: number }
+        kvCacheGb: { type: number }
+        totalMemoryGb: { type: number }
+        freeMemoryGb: { type: number }
+        fitsInMemory: { type: boolean }
+        prefillFlops: { type: number }
+        ttftSeconds: { type: number }
+        decodeMemorySeconds: { type: number }
+        decodeComputeSeconds: { type: number }
+        tpotSeconds: { type: number }
+        totalLatencySeconds: { type: number }
+        throughputTokensPerSec: { type: number }
+        costPerMillionTokensUsd: { type: number }
+        arithmeticIntensity: { type: number }
+        ridgePoint: { type: number }
+        achievableTflops: { type: number }
+        bottleneck: { type: string, enum: [memory, compute] }
+        crossoverBatchSize: { type: integer }
+        explanation: { type: string }
+        sweep:
+          type: array
+          items:
+            $ref: "#/components/schemas/SweepPoint"
+    ScenarioInput:
+      type: object
+      required: [name, modelId, gpuId, precision, batchSize, inputTokens, outputTokens, mfu]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        modelId: { type: integer }
+        gpuId: { type: integer }
+        precision: { type: string, enum: [fp16, bf16, fp8, int4] }
+        batchSize: { type: integer, minimum: 1, maximum: 256 }
+        inputTokens: { type: integer, minimum: 1 }
+        outputTokens: { type: integer, minimum: 1 }
+        mfu: { type: number, minimum: 0.05, maximum: 1 }
+    Scenario:
+      allOf:
+        - $ref: "#/components/schemas/ScenarioInput"
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id: { type: integer }
+            createdAt: { type: string, format: date-time }

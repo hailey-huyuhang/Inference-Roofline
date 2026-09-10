@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Inference Roofline"
+description = "An interactive engineering calculator that estimates LLM serving latency, throughput, GPU memory use, bottlenecks, and cost, with roofline and batch-sweep visualizations plus saved scenarios."
+version = "1.0.0"
+id = "artifacts/inference-roofline"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24313
+
+[services.development]
+run = "pnpm --filter @workspace/inference-roofline run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/inference-roofline", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/inference-roofline/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24313"
+BASE_PATH = "/"

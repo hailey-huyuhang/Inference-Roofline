@@ -1,6 +1,6 @@
-# [Project name]
+# Inference Roofline
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Interactive LLM inference latency, throughput, memory, and cost estimator.
 
 ## Run & Operate
 
@@ -22,7 +22,11 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/inference-roofline` — React calculator UI
+- `artifacts/api-server/src/lib/estimator.ts` — estimator formulas
+- `artifacts/api-server/src/routes/inference.ts` — REST endpoints
+- `lib/api-spec/openapi.yaml` — API contract
+- `lib/db/src/schema` — PostgreSQL schema
 
 ## Architecture decisions
 
@@ -30,7 +34,7 @@ _Populate as you build — non-obvious choices a reader couldn't infer from the 
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Compares prefill and decode constraints, explains the active bottleneck, visualizes the roofline and batch-size sweep, and persists named scenarios.
 
 ## User preferences
 

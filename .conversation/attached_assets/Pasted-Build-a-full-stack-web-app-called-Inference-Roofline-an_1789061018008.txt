@@ -1,0 +1,110 @@
+Build a full-stack web app called "Inference Roofline" — an interactive
+calculator that estimates the latency, throughput, and cost of serving a
+large language model on a given GPU, and explains *why* the number is what
+it is in language a non-expert can follow.
+
+## Stack (please use exactly this)
+- Frontend: React with TypeScript, Vite, Tailwind CSS, Recharts for charts
+- Backend: Node.js + Express with TypeScript, REST API
+- Database: PostgreSQL
+- Single deployable app on Replit
+
+## The core idea
+LLM inference has two phases with completely different bottlenecks:
+- **Prefill** processes the whole input prompt in one forward pass. It is
+  compute-bound — the GPU's FLOPs are the limit.
+- **Decode** generates one token at a time. Every single token requires
+  re-reading the entire weight matrix from HBM, so it is memory-bandwidth
+  bound and the GPU's compute sits mostly idle.
+The app should make that asymmetry visible and intuitive.
+
+## Data model (seed these tables on first run)
+`gpus`: id, name, hbm_bandwidth_gb_s, dense_bf16_tflops, memory_gb,
+hourly_cost_usd. Seed with NVIDIA A100 80GB SXM (2039 GB/s, 312 TFLOPS,
+80 GB, $1.80/hr), H100 SXM (3350 GB/s, 989 TFLOPS, 80 GB, $2.99/hr),
+H200 SXM (4800 GB/s, 989 TFLOPS, 141 GB, $3.99/hr), L40S (864 GB/s, 181
+TFLOPS, 48 GB, $1.10/hr).
+
+`models`: id, name, params_billions, num_layers, hidden_size,
+num_attention_heads, num_kv_heads, is_moe, active_params_billions.
+Seed with Llama-3-8B, Llama-3-70B, Qwen2.5-7B, Qwen2.5-32B, and
+Mixtral-8x7B (MoE, 46.7B total / 12.9B active).
+
+`scenarios`: saved user configurations — id, name, model_id, gpu_id,
+precision, batch_size, input_tokens, output_tokens, created_at.
+
+## Calculation (this is the heart of the app — implement it carefully)
+Inputs: model, GPU, precision (fp16/bf16 = 2 bytes, fp8 = 1, int4 = 0.5),
+batch size B, input length S_in, output length S_out.
+
+Let P = active parameter count (use active_params_billions for MoE models,
+params_billions otherwise), and b = bytes per parameter from precision.
+
+1. **Weight memory** = P * b. Compare against GPU memory_gb and warn the
+   user if the model does not fit.
+2. **KV cache bytes** = 2 * num_layers * num_kv_heads * (hidden_size /
+   num_attention_heads) * b * (S_in + S_out) * B. Show this separately —
+   users are always surprised how large it gets.
+3. **Prefill (TTFT)**: FLOPs = 2 * P * S_in * B. Time = FLOPs /
+   (dense_bf16_tflops * MFU), with MFU (model FLOPs utilization) as a
+   user-adjustable slider defaulting to 0.4.
+4. **Decode (TPOT, time per output token)**: bytes moved per token step =
+   (P * b) + (KV cache bytes). Time = bytes / hbm_bandwidth. Also compute
+   the compute-bound time = (2 * P * B) / (dense_bf16_tflops * MFU) and
+   take the **max** of the two — that max is the roofline.
+5. **Arithmetic intensity** = (2 * P * B) / (P * b + KV bytes) FLOPs/byte.
+   **Ridge point** = dense_bf16_tflops / hbm_bandwidth. If intensity is
+   below the ridge point the workload is memory-bound; above it, compute-
+   bound. Report which one, and how far from the crossover.
+6. **Total latency** = TTFT + TPOT * (S_out - 1).
+   **Throughput** = (B * S_out) / total_latency tokens/sec.
+   **Cost per 1M output tokens** = (hourly_cost_usd / 3600) /
+   throughput * 1_000_000.
+
+Put all of this in a single well-tested backend module. Write unit tests
+for it.
+
+## API
+- GET /api/gpus, GET /api/models — return seed data
+- POST /api/estimate — takes the config, returns every intermediate value
+  above (not just the final number), so the UI can show the breakdown
+- GET/POST/DELETE /api/scenarios — save and load named configurations
+
+## UI
+A single page, two columns on desktop, stacked on mobile.
+
+Left: the input form — model and GPU dropdowns, precision selector, and
+sliders for batch size (1–256, log scale), input length, output length,
+and MFU.
+
+Right: results, updating live as inputs change.
+- A prominent verdict banner: "Memory-bound" or "Compute-bound", with one
+  plain-English sentence explaining the consequence. For memory-bound,
+  something like: "At batch size 4, this GPU spends most of its time
+  waiting on memory, not calculating. Raising batch size is nearly free
+  until you hit the crossover at batch size 38."
+- Metric cards: time to first token, time per output token, total latency,
+  throughput, cost per 1M tokens.
+- A **roofline chart** (log-log): arithmetic intensity on x, achievable
+  FLOPs on y, the roofline itself as the classic bent line, and this
+  workload plotted as a point on it.
+- A **batch-size sweep chart**: throughput and cost per 1M tokens as batch
+  size goes 1 → 256, with the current batch marked. The crossover from
+  memory-bound to compute-bound should be visually obvious.
+- A memory breakdown bar: weights vs KV cache vs free, against GPU
+  capacity.
+- A "Save scenario" button and a list of saved scenarios that can be
+  loaded back or compared side by side.
+
+Design should be clean and technical — dark theme, monospace for numbers,
+generous whitespace. It should look like a tool an engineer would trust,
+not a marketing page.
+
+## Explicitly out of scope
+No user accounts, no authentication, no real GPU benchmarking, no LLM API
+calls. Everything is analytical estimation from the formulas above.
+
+## Deliverables
+Working app, seeded database, unit tests for the estimator, and a README
+that states the assumptions and limitations of the roofline model in a
+short paragraph.
