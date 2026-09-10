@@ -6,6 +6,7 @@ export const scenariosTable = pgTable("scenarios", {
   modelId: integer("model_id").notNull(),
   gpuId: integer("gpu_id").notNull(),
   precision: text("precision").notNull(),
+  kvPrecision: text("kv_precision").notNull().default("bf16"),
   batchSize: integer("batch_size").notNull(),
   inputTokens: integer("input_tokens").notNull(),
   outputTokens: integer("output_tokens").notNull(),

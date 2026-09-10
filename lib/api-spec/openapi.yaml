@@ -145,13 +145,16 @@ components:
         activeParamsBillions: { type: number }
     EstimateInput:
       type: object
-      required: [modelId, gpuId, precision, batchSize, inputTokens, outputTokens, mfu]
+      required: [modelId, gpuId, precision, kvPrecision, batchSize, inputTokens, outputTokens, mfu]
       properties:
         modelId: { type: integer }
         gpuId: { type: integer }
         precision:
           type: string
           enum: [fp16, bf16, fp8, int4]
+        kvPrecision:
+          type: string
+          enum: [fp16, bf16, fp8]
         batchSize: { type: integer, minimum: 1, maximum: 256 }
         inputTokens: { type: integer, minimum: 1, maximum: 131072 }
         outputTokens: { type: integer, minimum: 1, maximum: 32768 }
@@ -170,15 +173,18 @@ components:
         fitsInMemory: { type: boolean }
     EstimateResult:
       type: object
-      required: [model, gpu, precision, bytesPerParameter, activeParamsBillions, weightMemoryGb, kvCacheGb, totalMemoryGb, freeMemoryGb, fitsInMemory, prefillFlops, ttftSeconds, decodeMemorySeconds, decodeComputeSeconds, tpotSeconds, totalLatencySeconds, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, ridgePoint, achievableTflops, bottleneck, crossoverBatchSize, explanation, sweep]
+      required: [model, gpu, precision, kvPrecision, bytesPerParameter, activeParamsBillions, weightMemoryGb, weightTrafficPerStepGb, kvCacheGb, kvCachePeakGb, totalMemoryGb, freeMemoryGb, fitsInMemory, prefillFlops, ttftSeconds, decodeMemorySeconds, decodeComputeSeconds, tpotSeconds, totalLatencySeconds, throughputTokensPerSec, costPerMillionTokensUsd, arithmeticIntensity, ridgePoint, achievableTflops, bottleneck, crossoverBatchSize, explanation, sweep]
       properties:
         model: { $ref: "#/components/schemas/Model" }
         gpu: { $ref: "#/components/schemas/Gpu" }
         precision: { type: string, enum: [fp16, bf16, fp8, int4] }
+        kvPrecision: { type: string, enum: [fp16, bf16, fp8] }
         bytesPerParameter: { type: number }
         activeParamsBillions: { type: number }
         weightMemoryGb: { type: number }
+        weightTrafficPerStepGb: { type: number }
         kvCacheGb: { type: number }
+        kvCachePeakGb: { type: number }
         totalMemoryGb: { type: number }
         freeMemoryGb: { type: number }
         fitsInMemory: { type: boolean }
@@ -194,7 +200,7 @@ components:
         ridgePoint: { type: number }
         achievableTflops: { type: number }
         bottleneck: { type: string, enum: [memory, compute] }
-        crossoverBatchSize: { type: integer }
+        crossoverBatchSize: { type: [integer, "null"] }
         explanation: { type: string }
         sweep:
           type: array
@@ -202,12 +208,13 @@ components:
             $ref: "#/components/schemas/SweepPoint"
     ScenarioInput:
       type: object
-      required: [name, modelId, gpuId, precision, batchSize, inputTokens, outputTokens, mfu]
+      required: [name, modelId, gpuId, precision, kvPrecision, batchSize, inputTokens, outputTokens, mfu]
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         modelId: { type: integer }
         gpuId: { type: integer }
         precision: { type: string, enum: [fp16, bf16, fp8, int4] }
+        kvPrecision: { type: string, enum: [fp16, bf16, fp8] }
         batchSize: { type: integer, minimum: 1, maximum: 256 }
         inputTokens: { type: integer, minimum: 1 }
         outputTokens: { type: integer, minimum: 1 }

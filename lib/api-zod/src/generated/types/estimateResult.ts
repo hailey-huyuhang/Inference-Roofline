@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EstimateResultBottleneck } from './estimateResultBottleneck';
+import type { EstimateResultKvPrecision } from './estimateResultKvPrecision';
 import type { EstimateResultPrecision } from './estimateResultPrecision';
 import type { Gpu } from './gpu';
 import type { Model } from './model';
@@ -15,10 +16,13 @@ export interface EstimateResult {
   model: Model;
   gpu: Gpu;
   precision: EstimateResultPrecision;
+  kvPrecision: EstimateResultKvPrecision;
   bytesPerParameter: number;
   activeParamsBillions: number;
   weightMemoryGb: number;
+  weightTrafficPerStepGb: number;
   kvCacheGb: number;
+  kvCachePeakGb: number;
   totalMemoryGb: number;
   freeMemoryGb: number;
   fitsInMemory: boolean;
@@ -34,7 +38,8 @@ export interface EstimateResult {
   ridgePoint: number;
   achievableTflops: number;
   bottleneck: EstimateResultBottleneck;
-  crossoverBatchSize: number;
+  /** @nullable */
+  crossoverBatchSize: number | null;
   explanation: string;
   sweep: SweepPoint[];
 }

@@ -7,15 +7,18 @@
  */
 
 export * from './estimateInput';
+export * from './estimateInputKvPrecision';
 export * from './estimateInputPrecision';
 export * from './estimateResult';
 export * from './estimateResultBottleneck';
+export * from './estimateResultKvPrecision';
 export * from './estimateResultPrecision';
 export * from './gpu';
 export * from './healthStatus';
 export * from './model';
 export * from './scenario';
 export * from './scenarioInput';
+export * from './scenarioInputKvPrecision';
 export * from './scenarioInputPrecision';
 export * from './sweepPoint';
 export * from './sweepPointBottleneck';

@@ -5,6 +5,7 @@
  * Inference Roofline API
  * OpenAPI spec version: 0.1.0
  */
+import type { ScenarioInputKvPrecision } from './scenarioInputKvPrecision';
 import type { ScenarioInputPrecision } from './scenarioInputPrecision';
 
 export interface ScenarioInput {
@@ -16,6 +17,7 @@ export interface ScenarioInput {
   modelId: number;
   gpuId: number;
   precision: ScenarioInputPrecision;
+  kvPrecision: ScenarioInputKvPrecision;
   /**
      * @minimum 1
      * @maximum 256

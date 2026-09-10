@@ -7,6 +7,7 @@ import {
   useCreateScenario,
   useDeleteScenario,
   EstimateInputPrecision,
+  EstimateInputKvPrecision,
   getListScenariosQueryKey
 } from "@workspace/api-client-react";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -43,6 +44,7 @@ export default function Home() {
   const [modelId, setModelId] = useState<string>("");
   const [gpuId, setGpuId] = useState<string>("");
   const [precision, setPrecision] = useState<EstimateInputPrecision>("bf16");
+  const [kvPrecision, setKvPrecision] = useState<EstimateInputKvPrecision>("bf16");
   const [batchSize, setBatchSize] = useState<number>(32);
   const [inputTokens, setInputTokens] = useState<number>(2048);
   const [outputTokens, setOutputTokens] = useState<number>(512);
@@ -86,6 +88,7 @@ export default function Home() {
         modelId: compareScenario.modelId,
         gpuId: compareScenario.gpuId,
         precision: compareScenario.precision as EstimateInputPrecision,
+        kvPrecision: compareScenario.kvPrecision as EstimateInputKvPrecision,
         batchSize: compareScenario.batchSize,
         inputTokens: compareScenario.inputTokens,
         outputTokens: compareScenario.outputTokens,
@@ -103,13 +106,14 @@ export default function Home() {
         modelId: parseInt(modelId),
         gpuId: parseInt(gpuId),
         precision,
+        kvPrecision,
         batchSize: debouncedBatchSize,
         inputTokens: debouncedInputTokens,
         outputTokens: debouncedOutputTokens,
         mfu: debouncedMfu
       }
     });
-  }, [modelId, gpuId, precision, debouncedBatchSize, debouncedInputTokens, debouncedOutputTokens, debouncedMfu]);
+  }, [modelId, gpuId, precision, kvPrecision, debouncedBatchSize, debouncedInputTokens, debouncedOutputTokens, debouncedMfu]);
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center gap-6 max-w-7xl mx-auto font-sans">
@@ -125,6 +129,7 @@ export default function Home() {
             setModelId(s.modelId.toString());
             setGpuId(s.gpuId.toString());
             setPrecision(s.precision as EstimateInputPrecision);
+            setKvPrecision(s.kvPrecision as EstimateInputKvPrecision);
             setBatchSize(s.batchSize);
             setInputTokens(s.inputTokens);
             setOutputTokens(s.outputTokens);
@@ -136,6 +141,7 @@ export default function Home() {
             modelId: parseInt(modelId),
             gpuId: parseInt(gpuId),
             precision,
+            kvPrecision,
             batchSize,
             inputTokens,
             outputTokens,
@@ -189,19 +195,34 @@ export default function Home() {
                 )}
               </div>
 
-              <div className="space-y-2">
-                <Label>Precision</Label>
-                <Select value={precision} onValueChange={(v) => setPrecision(v as EstimateInputPrecision)}>
-                  <SelectTrigger className="font-mono text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fp16" className="font-mono text-xs">FP16</SelectItem>
-                    <SelectItem value="bf16" className="font-mono text-xs">BF16</SelectItem>
-                    <SelectItem value="fp8" className="font-mono text-xs">FP8</SelectItem>
-                    <SelectItem value="int4" className="font-mono text-xs">INT4</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Weight precision</Label>
+                  <Select value={precision} onValueChange={(v) => setPrecision(v as EstimateInputPrecision)}>
+                    <SelectTrigger className="font-mono text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fp16" className="font-mono text-xs">FP16</SelectItem>
+                      <SelectItem value="bf16" className="font-mono text-xs">BF16</SelectItem>
+                      <SelectItem value="fp8" className="font-mono text-xs">FP8</SelectItem>
+                      <SelectItem value="int4" className="font-mono text-xs">INT4</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>KV precision</Label>
+                  <Select value={kvPrecision} onValueChange={(v) => setKvPrecision(v as EstimateInputKvPrecision)}>
+                    <SelectTrigger className="font-mono text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fp16" className="font-mono text-xs">FP16</SelectItem>
+                      <SelectItem value="bf16" className="font-mono text-xs">BF16</SelectItem>
+                      <SelectItem value="fp8" className="font-mono text-xs">FP8</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <Separator />
@@ -334,7 +355,7 @@ export default function Home() {
                       {estimate.fitsInMemory ? (
                         <Badge variant="default" className="bg-chart-2/20 text-chart-2 hover:bg-chart-2/30">Fits in VRAM</Badge>
                       ) : (
-                        <Badge variant="destructive" className="bg-destructive/20 text-destructive hover:bg-destructive/30">OOM (Out of Memory)</Badge>
+                        <Badge variant="destructive" className="bg-destructive/20 text-destructive hover:bg-destructive/30">Does not fit in VRAM</Badge>
                       )}
                     </CardTitle>
                     <CardDescription>Weights and KV Cache utilization</CardDescription>
@@ -348,6 +369,18 @@ export default function Home() {
                       kvCacheGb={estimate.kvCacheGb} 
                       capacityGb={estimate.gpu.memoryGb}
                     />
+                    {estimate.model.isMoe && (
+                      <div className="rounded-md border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+                        <div className="flex justify-between gap-4">
+                          <span>All expert weights resident</span>
+                          <strong className="font-mono text-foreground">{formatNumber(estimate.weightMemoryGb, 1)} GB</strong>
+                        </div>
+                        <div className="mt-1 flex justify-between gap-4">
+                          <span>Routed weight traffic per decode step</span>
+                          <strong className="font-mono text-foreground">{formatNumber(estimate.weightTrafficPerStepGb, 1)} GB</strong>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   {compareEstimate && compareScenario && (
@@ -403,7 +436,12 @@ export default function Home() {
                         <BatchSweepChart estimate={estimate} currentBatchSize={batchSize} />
                       </div>
                       <div className="mt-4 text-sm text-muted-foreground bg-muted/30 p-4 rounded-md font-mono">
-                        Crossover Batch Size (Mem to Compute): <strong className="text-foreground">{formatNumber(estimate.crossoverBatchSize, 0)}</strong>
+                        Crossover Batch Size (Mem to Compute):{" "}
+                        <strong className="text-foreground">
+                          {estimate.crossoverBatchSize === null
+                            ? "None below batch 256"
+                            : formatNumber(estimate.crossoverBatchSize, 0)}
+                        </strong>
                       </div>
                     </TabsContent>
 
@@ -635,7 +673,8 @@ function ScenariosDialog({ onLoad, onCompare, compareId, currentConfig }: { onLo
               </div>
               <div className="flex gap-2 text-xs font-mono text-muted-foreground flex-wrap">
                 <Badge variant="outline">Batch: {s.batchSize}</Badge>
-                <Badge variant="outline">Prec: {s.precision}</Badge>
+                <Badge variant="outline">Weights: {s.precision}</Badge>
+                <Badge variant="outline">KV: {s.kvPrecision}</Badge>
                 <Badge variant="outline">Tokens: {s.inputTokens}/{s.outputTokens}</Badge>
               </div>
             </div>

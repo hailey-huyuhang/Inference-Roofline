@@ -11,7 +11,7 @@ import {
   ListModelsResponse,
   ListScenariosResponse,
 } from "@workspace/api-zod";
-import { estimateInference, type Precision } from "../lib/estimator";
+import { estimateInference, type KvPrecision, type Precision } from "../lib/estimator";
 
 const router: IRouter = Router();
 
@@ -42,6 +42,7 @@ router.post("/estimate", async (req, res): Promise<void> => {
   const result = estimateInference(model, gpu, {
     ...parsed.data,
     precision: parsed.data.precision as Precision,
+    kvPrecision: parsed.data.kvPrecision as KvPrecision,
   });
   res.json(CreateEstimateResponse.parse(result));
 });

@@ -1,9 +1,11 @@
 import type { Gpu, Model } from "@workspace/db";
 
 export type Precision = "fp16" | "bf16" | "fp8" | "int4";
+export type KvPrecision = "fp16" | "bf16" | "fp8";
 
 export interface EstimateConfig {
   precision: Precision;
+  kvPrecision: KvPrecision;
   batchSize: number;
   inputTokens: number;
   outputTokens: number;
@@ -17,28 +19,44 @@ const PRECISION_BYTES: Record<Precision, number> = {
   int4: 0.5,
 };
 
+const KV_PRECISION_BYTES: Record<KvPrecision, number> = {
+  fp16: 2,
+  bf16: 2,
+  fp8: 1,
+};
+
 function calculatePoint(model: Model, gpu: Gpu, config: EstimateConfig) {
   const bytesPerParameter = PRECISION_BYTES[config.precision];
+  const bytesPerKvElement = KV_PRECISION_BYTES[config.kvPrecision];
   const activeParams = (model.isMoe ? model.activeParamsBillions : model.paramsBillions) * 1e9;
-  const weightBytes = activeParams * bytesPerParameter;
+  const totalParams = model.paramsBillions * 1e9;
+  const weightBytesResident = totalParams * bytesPerParameter;
+  const weightBytesPerStep = activeParams * bytesPerParameter;
   const headDim = model.hiddenSize / model.numAttentionHeads;
-  const kvCacheBytes =
+  const kvElementsPerToken =
     2 *
     model.numLayers *
     model.numKvHeads *
     headDim *
-    bytesPerParameter *
-    (config.inputTokens + config.outputTokens) *
     config.batchSize;
+  const kvCacheBytesPeak =
+    kvElementsPerToken *
+    bytesPerKvElement *
+    (config.inputTokens + config.outputTokens);
+  const avgKvTokens = config.inputTokens + config.outputTokens / 2;
+  const kvCacheBytesAverage =
+    kvElementsPerToken * bytesPerKvElement * avgKvTokens;
   const peakFlops = gpu.denseBf16Tflops * 1e12;
   const bandwidthBytesPerSecond = gpu.hbmBandwidthGbS * 1e9;
   const prefillFlops = 2 * activeParams * config.inputTokens * config.batchSize;
   const ttftSeconds = prefillFlops / (peakFlops * config.mfu);
-  const decodeMemorySeconds = (weightBytes + kvCacheBytes) / bandwidthBytesPerSecond;
+  const decodeMemorySeconds =
+    (weightBytesPerStep + kvCacheBytesAverage) / bandwidthBytesPerSecond;
   const decodeComputeSeconds = (2 * activeParams * config.batchSize) / (peakFlops * config.mfu);
   const tpotSeconds = Math.max(decodeMemorySeconds, decodeComputeSeconds);
   const arithmeticIntensity =
-    (2 * activeParams * config.batchSize) / (weightBytes + kvCacheBytes);
+    (2 * activeParams * config.batchSize) /
+    (weightBytesPerStep + kvCacheBytesAverage);
   const ridgePoint = peakFlops / bandwidthBytesPerSecond;
   const bottleneck = arithmeticIntensity < ridgePoint ? "memory" : "compute";
   const totalLatencySeconds = ttftSeconds + tpotSeconds * Math.max(0, config.outputTokens - 1);
@@ -46,13 +64,15 @@ function calculatePoint(model: Model, gpu: Gpu, config: EstimateConfig) {
     (config.batchSize * config.outputTokens) / totalLatencySeconds;
   const costPerMillionTokensUsd =
     ((gpu.hourlyCostUsd / 3600) / throughputTokensPerSec) * 1_000_000;
-  const totalMemoryGb = (weightBytes + kvCacheBytes) / 1e9;
+  const totalMemoryGb = (weightBytesResident + kvCacheBytesPeak) / 1e9;
 
   return {
     bytesPerParameter,
     activeParamsBillions: activeParams / 1e9,
-    weightMemoryGb: weightBytes / 1e9,
-    kvCacheGb: kvCacheBytes / 1e9,
+    weightMemoryGb: weightBytesResident / 1e9,
+    weightTrafficPerStepGb: weightBytesPerStep / 1e9,
+    kvCacheGb: kvCacheBytesPeak / 1e9,
+    kvCachePeakGb: kvCacheBytesPeak / 1e9,
     totalMemoryGb,
     freeMemoryGb: Math.max(0, gpu.memoryGb - totalMemoryGb),
     fitsInMemory: totalMemoryGb <= gpu.memoryGb,
@@ -86,16 +106,19 @@ export function estimateInference(model: Model, gpu: Gpu, config: EstimateConfig
     };
   });
   const crossoverBatchSize =
-    sweep.find((point) => point.bottleneck === "compute")?.batchSize ?? 256;
+    sweep.find((point) => point.bottleneck === "compute")?.batchSize ?? null;
   const explanation =
-    current.bottleneck === "memory"
-      ? `At batch size ${config.batchSize}, this GPU spends most of decode waiting on HBM, not calculating. Raising batch size improves utilization until roughly batch ${crossoverBatchSize}.`
-      : `At batch size ${config.batchSize}, compute is the decode limit. More memory bandwidth alone will not make this workload faster.`;
+    current.bottleneck === "compute"
+      ? `At batch size ${config.batchSize}, compute is the decode limit. More memory bandwidth alone will not make this workload faster.`
+      : crossoverBatchSize
+        ? `At batch size ${config.batchSize}, decode is waiting on HBM, not calculating. Raising batch size improves utilization until roughly batch ${crossoverBatchSize}.`
+        : `At batch size ${config.batchSize}, decode is memory-bound, and stays memory-bound at every batch size up to 256 — the KV cache grows with the batch, so arithmetic intensity plateaus around ${current.arithmeticIntensity.toFixed(0)} FLOPs/byte, well below this GPU's ridge point of ${current.ridgePoint.toFixed(0)}.`;
 
   return {
     model,
     gpu,
     precision: config.precision,
+    kvPrecision: config.kvPrecision,
     ...current,
     crossoverBatchSize,
     explanation,

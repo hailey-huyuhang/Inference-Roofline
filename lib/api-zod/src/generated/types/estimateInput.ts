@@ -5,12 +5,14 @@
  * Inference Roofline API
  * OpenAPI spec version: 0.1.0
  */
+import type { EstimateInputKvPrecision } from './estimateInputKvPrecision';
 import type { EstimateInputPrecision } from './estimateInputPrecision';
 
 export interface EstimateInput {
   modelId: number;
   gpuId: number;
   precision: EstimateInputPrecision;
+  kvPrecision: EstimateInputKvPrecision;
   /**
      * @minimum 1
      * @maximum 256

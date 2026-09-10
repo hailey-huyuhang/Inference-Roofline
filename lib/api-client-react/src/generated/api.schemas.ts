@@ -40,10 +40,20 @@ export const EstimateInputPrecision = {
   int4: 'int4',
 } as const;
 
+export type EstimateInputKvPrecision = typeof EstimateInputKvPrecision[keyof typeof EstimateInputKvPrecision];
+
+
+export const EstimateInputKvPrecision = {
+  fp16: 'fp16',
+  bf16: 'bf16',
+  fp8: 'fp8',
+} as const;
+
 export interface EstimateInput {
   modelId: number;
   gpuId: number;
   precision: EstimateInputPrecision;
+  kvPrecision: EstimateInputKvPrecision;
   /**
      * @minimum 1
      * @maximum 256
@@ -93,6 +103,15 @@ export const EstimateResultPrecision = {
   int4: 'int4',
 } as const;
 
+export type EstimateResultKvPrecision = typeof EstimateResultKvPrecision[keyof typeof EstimateResultKvPrecision];
+
+
+export const EstimateResultKvPrecision = {
+  fp16: 'fp16',
+  bf16: 'bf16',
+  fp8: 'fp8',
+} as const;
+
 export type EstimateResultBottleneck = typeof EstimateResultBottleneck[keyof typeof EstimateResultBottleneck];
 
 
@@ -105,10 +124,13 @@ export interface EstimateResult {
   model: Model;
   gpu: Gpu;
   precision: EstimateResultPrecision;
+  kvPrecision: EstimateResultKvPrecision;
   bytesPerParameter: number;
   activeParamsBillions: number;
   weightMemoryGb: number;
+  weightTrafficPerStepGb: number;
   kvCacheGb: number;
+  kvCachePeakGb: number;
   totalMemoryGb: number;
   freeMemoryGb: number;
   fitsInMemory: boolean;
@@ -124,7 +146,8 @@ export interface EstimateResult {
   ridgePoint: number;
   achievableTflops: number;
   bottleneck: EstimateResultBottleneck;
-  crossoverBatchSize: number;
+  /** @nullable */
+  crossoverBatchSize: number | null;
   explanation: string;
   sweep: SweepPoint[];
 }
@@ -139,6 +162,15 @@ export const ScenarioInputPrecision = {
   int4: 'int4',
 } as const;
 
+export type ScenarioInputKvPrecision = typeof ScenarioInputKvPrecision[keyof typeof ScenarioInputKvPrecision];
+
+
+export const ScenarioInputKvPrecision = {
+  fp16: 'fp16',
+  bf16: 'bf16',
+  fp8: 'fp8',
+} as const;
+
 export interface ScenarioInput {
   /**
      * @minLength 1
@@ -148,6 +180,7 @@ export interface ScenarioInput {
   modelId: number;
   gpuId: number;
   precision: ScenarioInputPrecision;
+  kvPrecision: ScenarioInputKvPrecision;
   /**
      * @minimum 1
      * @maximum 256

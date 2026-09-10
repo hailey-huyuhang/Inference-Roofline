@@ -1,0 +1,146 @@
+I reviewed the generated estimator and found two modeling bugs plus a few
+gaps. Please fix them exactly as described below. Do not restructure the
+project, rename files, or change the API shape beyond what's listed.
+
+## Bug 1 (critical): MoE weight memory uses active parameters
+
+In `artifacts/api-server/src/lib/estimator.ts`, `weightBytes` is computed
+from active parameters and then feeds both the memory footprint and the
+decode traffic. Those are two different quantities. For a Mixtral-style
+MoE model, *all* experts are resident in VRAM, but only the routed experts
+are read per decode step. The current code reports Mixtral-8x7B at bf16 as
+25.8 GB and claims it fits on an 80 GB H100. It actually needs 93.4 GB
+resident and does not fit.
+
+Split them:
+
+```ts
+const activeParams = (model.isMoe ? model.activeParamsBillions : model.paramsBillions) * 1e9;
+const totalParams  = model.paramsBillions * 1e9;
+
+const weightBytesResident = totalParams  * bytesPerParameter;
+const weightBytesPerStep  = activeParams * bytesPerParameter;
+```
+
+- `weightMemoryGb`, `totalMemoryGb`, `freeMemoryGb`, `fitsInMemory` use
+  `weightBytesResident`.
+- `decodeMemorySeconds` and the denominator of `arithmeticIntensity` use
+  `weightBytesPerStep`.
+- `prefillFlops` and `decodeComputeSeconds` keep using `activeParams` —
+  those are already correct.
+
+Add a new field `weightTrafficPerStepGb` to the result so the UI can show
+both numbers, and surface it in the memory breakdown section for MoE
+models only.
+
+## Bug 2 (critical): crossoverBatchSize is fabricated
+
+`crossoverBatchSize` falls back to 256 when no crossover exists, so the UI
+always displays a number even when the workload never becomes
+compute-bound. It usually doesn't: arithmetic intensity is
+`2·P·B / (weightBytesPerStep + kvCacheBytes(B))`, and since the KV cache
+grows linearly with batch size, intensity plateaus. For Llama-3-8B on an
+A100 with 2048 input / 256 output tokens, intensity asymptotes near 53
+FLOPs/byte while the ridge point is 153 — it never crosses at any batch
+size. The app currently claims a crossover at 256 anyway.
+
+Change the type to `number | null`:
+
+```ts
+const crossoverBatchSize = sweep.find(p => p.bottleneck === "compute")?.batchSize ?? null;
+```
+
+Update the OpenAPI spec and the generated zod types to allow null.
+
+Then make the explanation string handle three cases:
+
+```ts
+const explanation =
+  current.bottleneck === "compute"
+    ? `At batch size ${config.batchSize}, compute is the decode limit. More memory bandwidth alone will not make this workload faster.`
+    : crossoverBatchSize
+      ? `At batch size ${config.batchSize}, decode is waiting on HBM, not calculating. Raising batch size improves utilization until roughly batch ${crossoverBatchSize}.`
+      : `At batch size ${config.batchSize}, decode is memory-bound, and stays memory-bound at every batch size up to 256 — the KV cache grows with the batch, so arithmetic intensity plateaus around ${current.arithmeticIntensity.toFixed(0)} FLOPs/byte, well below this GPU's ridge point of ${current.ridgePoint.toFixed(0)}.`;
+```
+
+In `home.tsx`, when `crossoverBatchSize` is null, render "None below batch
+256" instead of a number. Never render a fallback number as if it were a
+real crossover.
+
+## Bug 3: precision is applied to the KV cache as well as the weights
+
+Quantizing weights to int4 does not quantize the KV cache — production
+systems typically keep it at fp16 or fp8. Add a separate `kvPrecision`
+input (fp16 | bf16 | fp8, default bf16) with its own bytes-per-element,
+used only for `kvCacheBytes`. Add it to the API request schema and as a
+small dropdown next to the weight precision selector in the UI.
+
+## Bug 4: KV cache is sized at its peak for every decode step
+
+`kvCacheBytes` uses `inputTokens + outputTokens`, which is the size at the
+*end* of generation, but it is applied to every decode step. This
+overestimates decode time. Use the average over the generation instead:
+
+```ts
+const avgKvTokens = config.inputTokens + config.outputTokens / 2;
+```
+
+Keep the peak value for the memory-footprint numbers (`kvCacheGb`,
+`fitsInMemory`) — peak is what has to be allocated. Only the *traffic*
+calculation uses the average. Add a `kvCachePeakGb` field so the two are
+distinguishable in the response.
+
+## Tests
+
+The three existing tests only assert that the implementation matches
+itself (e.g. that `tpotSeconds === Math.max(...)`). Replace them with
+tests that check against independently computed values. Add at least:
+
+1. Ridge point for an A100 (2039 GB/s, 312 dense BF16 TFLOPS) is ~153
+   FLOPs/byte. Hard-code 153 with a tolerance, do not recompute it from
+   the same expression the implementation uses.
+2. Mixtral-8x7B at bf16 reports ~93.4 GB resident weight memory and
+   `fitsInMemory === false` on an 80 GB GPU.
+3. Llama-3-70B at bf16 needs ~141 GB of weights and `fitsInMemory ===
+   false` on an 80 GB GPU.
+4. A configuration where no crossover exists returns
+   `crossoverBatchSize === null`, and the explanation mentions the
+   plateau.
+5. `int4` weight precision with `bf16` kvPrecision shrinks weight memory
+   4x while leaving `kvCacheGb` unchanged.
+
+## README
+
+Add these to the assumptions and limitations section, in prose:
+
+- Resident weight memory assumes all MoE experts stay in VRAM; per-step
+  weight traffic assumes only routed experts are read, which is optimistic
+  at large batch sizes since different tokens route to different experts.
+- KV-cache traffic uses the average size over the generation; the memory
+  footprint uses the peak.
+- Prefill FLOPs ignore the O(S²) attention term, so time-to-first-token is
+  underestimated at long context.
+- Single-device only: no tensor or pipeline parallel, and no
+  interconnect cost.
+
+Also add a short "Review notes" section stating that the initial spec was
+LLM-assisted and contained a modeling error — it defined MoE weight memory
+in terms of active parameters — which was caught by reviewing the
+generated code against hand-computed values, and that the estimator now
+separates resident weight bytes from per-step weight traffic.
+
+## Also
+
+Add `.env` to `.gitignore`.
+
+In `BatchSweepChart.tsx`, points failing `fitsInMemory` are silently
+filtered out, so the curve truncates with no explanation. Instead of
+dropping them, render them in a muted style with a note that the
+configuration exceeds GPU memory beyond that batch size.
+
+## Verification
+
+Run `pnpm run typecheck` and the estimator tests, and confirm all pass.
+Then confirm in the running app that selecting Mixtral-8x7B at bf16 on an
+H100 80GB shows roughly 93 GB of weights and an explicit "does not fit"
+warning.
